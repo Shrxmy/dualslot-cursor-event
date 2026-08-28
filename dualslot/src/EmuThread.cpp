@@ -80,15 +80,29 @@ void EmuThread::run()
     QElapsedTimer frameClock;
     frameClock.start();
     while (!m_stopping.load()) {
-        std::optional<SlotState> slots;
+        std::optional<SlotState> pendingState;
         {
             std::lock_guard lock(m_mutex);
-            slots.swap(m_pendingSlots);
+            pendingState.swap(m_pendingSlots);
         }
-        if (slots) {
-            if (audioDevice)
-                SDL_ClearQueuedAudio(audioDevice);
-            switchSession(*slots);
+        if (pendingState) {
+            bool updated = false;
+            if (m_session && m_session->core() == ActiveCore::Melon &&
+                pendingState->desiredCore() == ActiveCore::Melon && pendingState->slot1 == m_activeSlots.slot1) {
+                QString error;
+                updated = m_session->updateSlots(*pendingState, error);
+                if (!updated && !error.isEmpty())
+                    emit errorRaised(error);
+                if (updated) {
+                    m_activeSlots = *pendingState;
+                    emit osdRequested(QStringLiteral("Slot-2 updated without rebooting Nintendo DS"));
+                }
+            }
+            if (!updated) {
+                if (audioDevice)
+                    SDL_ClearQueuedAudio(audioDevice);
+                switchSession(*pendingState);
+            }
         }
         processCommand();
         SDL_GameControllerUpdate();
@@ -169,7 +183,7 @@ void EmuThread::run()
     SDL_QuitSubSystem(SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 }
 
-void EmuThread::switchSession(const SlotState& slots)
+void EmuThread::switchSession(const SlotState& state)
 {
     if (m_session) {
         QString error;
@@ -178,9 +192,9 @@ void EmuThread::switchSession(const SlotState& slots)
         m_session->stop();
         m_session.reset();
     }
-    m_activeSlots = slots;
+    m_activeSlots = state;
 
-    const ActiveCore desired = slots.desiredCore();
+    const ActiveCore desired = state.desiredCore();
     if (desired == ActiveCore::Mgba)
         m_session = std::make_unique<MgbaSession>(m_firmware);
     else if (desired == ActiveCore::Melon)
@@ -192,7 +206,7 @@ void EmuThread::switchSession(const SlotState& slots)
     }
 
     QString error;
-    if (!m_session->start(slots, error)) {
+    if (!m_session->start(state, error)) {
         m_session.reset();
         emit coreChanged(ActiveCore::Idle, {});
         emit errorRaised(error);
@@ -202,7 +216,7 @@ void EmuThread::switchSession(const SlotState& slots)
     emit osdRequested(desired == ActiveCore::Mgba
         ? QStringLiteral("Now playing on Game Boy Advance")
         : QStringLiteral("Switched to Nintendo DS"));
-    if (desired == ActiveCore::Melon && !slots.slot2.isEmpty() && slots.slot2Type != RomType::Gba)
+    if (desired == ActiveCore::Melon && !state.slot2.isEmpty() && state.slot2Type != RomType::Gba)
         emit osdRequested(QStringLiteral("GB/GBC cartridges are not visible to DS software; Slot-1 remains active"));
 }
 

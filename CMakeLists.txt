@@ -17,6 +17,9 @@ set(BUILD_SHARED OFF CACHE BOOL "Build static dependencies" FORCE)
 set(BUILD_QT_SDL OFF CACHE BOOL "Do not build the melonDS frontend" FORCE)
 set(ENABLE_OGLRENDERER OFF CACHE BOOL "Use melonDS software rendering" FORCE)
 set(ENABLE_GDBSTUB OFF CACHE BOOL "Do not include the melonDS GDB stub" FORCE)
+# GCC 15 on MinGW currently ICEs while LTO-linking melonDS DMA.cpp.
+set(ENABLE_LTO_RELEASE OFF CACHE BOOL "Disable unstable MinGW LTO" FORCE)
+set(ENABLE_LTO OFF CACHE BOOL "Disable dependency LTO" FORCE)
 set(MELONDS_EMBED_BUILD_INFO OFF CACHE BOOL "Do not embed upstream git data" FORCE)
 
 add_subdirectory(mgba-master EXCLUDE_FROM_ALL)

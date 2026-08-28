@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QImage>
+#include <QMetaType>
 #include <QString>
 
 #include <cstdint>

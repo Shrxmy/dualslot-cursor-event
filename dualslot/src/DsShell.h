@@ -15,7 +15,7 @@ public:
     explicit DsShell(QWidget* parent = nullptr);
 
     void setFrame(const FramePacket& frame);
-    void setSlots(const SlotState& slots);
+    void setSlots(const SlotState& state);
     void setCore(ActiveCore core, const QString& title);
     void setLayout(ScreenMode mode);
     void setIntegerScale(bool enabled);

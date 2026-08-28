@@ -28,10 +28,10 @@ MgbaSession::~MgbaSession()
     stop();
 }
 
-bool MgbaSession::start(const SlotState& slots, QString& error)
+bool MgbaSession::start(const SlotState& state, QString& error)
 {
     stop();
-    m_romPath = slots.slot2;
+    m_romPath = state.slot2;
     m_savePath = m_romPath + QStringLiteral(".sav");
     m_title = QFileInfo(m_romPath).completeBaseName();
     const QByteArray romName = QFile::encodeName(m_romPath);
@@ -61,7 +61,7 @@ bool MgbaSession::start(const SlotState& slots, QString& error)
 
     const QString biosPath = m_core->platform(m_core) == mPLATFORM_GBA
         ? m_firmware.path(QStringLiteral("gbaBios"))
-        : m_firmware.path(slots.slot2Type == RomType::Gbc ? QStringLiteral("gbcBios") : QStringLiteral("gbBios"));
+        : m_firmware.path(state.slot2Type == RomType::Gbc ? QStringLiteral("gbcBios") : QStringLiteral("gbBios"));
     if (!biosPath.isEmpty()) {
         const QByteArray encoded = QFile::encodeName(biosPath);
         if (VFile* bios = VFileOpen(encoded.constData(), O_RDONLY)) {
@@ -141,18 +141,14 @@ bool MgbaSession::flushSave(QString& error)
     if (!size)
         return true;
 
-    // The core keeps its save VFile open. Write in-place rather than atomically
-    // replacing the path (which is not permitted for an open file on Windows).
-    QFile save(m_savePath);
-    if (!save.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
-        save.write(static_cast<const char*>(data), static_cast<qint64>(size)) != static_cast<qint64>(size) || !save.flush()) {
-        error = QStringLiteral("Failed to flush GBA save %1: %2").arg(m_savePath, save.errorString());
-        std::free(data);
-        return false;
-    }
-    save.close();
+    // Restore with writeback asks each mCore implementation to copy the
+    // snapshot into its live save VFile. Deinitialization immediately after a
+    // hot-swap then unmaps/syncs that VFile without replacing an open path.
+    const bool ok = m_core->savedataRestore(m_core, data, size, true);
     std::free(data);
-    return true;
+    if (!ok)
+        error = QStringLiteral("Failed to flush GBA save %1.").arg(m_savePath);
+    return ok;
 }
 
 bool MgbaSession::saveState(const QString& path, QString& error)

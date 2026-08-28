@@ -15,7 +15,7 @@ public:
     explicit MgbaSession(const FirmwareStore& firmware);
     ~MgbaSession() override;
 
-    bool start(const SlotState& slots, QString& error) override;
+    bool start(const SlotState& state, QString& error) override;
     void stop() override;
     FramePacket frame() override;
     void setKeys(std::uint32_t pressed) override;

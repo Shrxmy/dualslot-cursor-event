@@ -16,8 +16,9 @@ public:
     explicit MelonSession(const FirmwareStore& firmware);
     ~MelonSession() override;
 
-    bool start(const SlotState& slots, QString& error) override;
+    bool start(const SlotState& state, QString& error) override;
     void stop() override;
+    bool updateSlots(const SlotState& state, QString& error) override;
     FramePacket frame() override;
     void setKeys(std::uint32_t pressed) override;
     void setTouch(const TouchPoint& touch) override;
@@ -35,7 +36,7 @@ public:
     void writeFirmware(const std::uint8_t*, std::uint32_t) override { m_firmwareDirty = true; }
 
 private:
-    bool loadSlot2(const SlotState& slots, QString& error);
+    bool loadSlot2(const SlotState& state, QString& error);
     bool writeBytes(const QString& path, const std::uint8_t* data, std::uint32_t length, QString& error);
 
     const FirmwareStore& m_firmware;

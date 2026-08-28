@@ -34,9 +34,9 @@ void DsShell::setFrame(const FramePacket& frame)
     update();
 }
 
-void DsShell::setSlots(const SlotState& slots)
+void DsShell::setSlots(const SlotState& state)
 {
-    m_slots = slots;
+    m_slots = state;
     update();
 }
 

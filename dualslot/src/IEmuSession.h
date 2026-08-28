@@ -10,8 +10,10 @@ class IEmuSession {
 public:
     virtual ~IEmuSession() = default;
 
-    virtual bool start(const SlotState& slots, QString& error) = 0;
+    virtual bool start(const SlotState& state, QString& error) = 0;
     virtual void stop() = 0;
+    // Applies a same-core cartridge change without rebooting when supported.
+    virtual bool updateSlots(const SlotState&, QString&) { return false; }
     virtual FramePacket frame() = 0;
     virtual void setKeys(std::uint32_t pressed) = 0;
     virtual void setTouch(const TouchPoint& touch) = 0;

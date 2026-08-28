@@ -158,11 +158,25 @@ u64 FileLength(FileHandle* file)
 
 void Log(LogLevel level, const char* fmt, ...)
 {
+    if (level == LogLevel::Debug)
+        return;
     static const char* labels[] = {"debug", "info", "warning", "error"};
-    std::fprintf(stderr, "[melonDS:%s] ", labels[std::clamp(static_cast<int>(level), 0, 3)]);
+    static std::mutex logMutex;
+    std::lock_guard lock(logMutex);
+    const char* label = labels[std::clamp(static_cast<int>(level), 0, 3)];
     va_list args;
     va_start(args, fmt);
+    va_list fileArgs;
+    va_copy(fileArgs, args);
+    std::fprintf(stderr, "[melonDS:%s] ", label);
     std::vfprintf(stderr, fmt, args);
+    std::fflush(stderr);
+    if (std::FILE* file = std::fopen(GetLocalFilePath("dualslot.log").c_str(), "ab")) {
+        std::fprintf(file, "[melonDS:%s] ", label);
+        std::vfprintf(file, fmt, fileArgs);
+        std::fclose(file);
+    }
+    va_end(fileArgs);
     va_end(args);
 }
 

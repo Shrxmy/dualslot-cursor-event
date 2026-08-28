@@ -70,13 +70,13 @@ MelonSession::~MelonSession()
     stop();
 }
 
-bool MelonSession::start(const SlotState& slots, QString& error)
+bool MelonSession::start(const SlotState& state, QString& error)
 {
     stop();
-    m_slots = slots;
-    m_title = QFileInfo(slots.slot1).completeBaseName();
-    m_ndsSavePath = slots.slot1 + QStringLiteral(".sav");
-    m_gbaSavePath = slots.slot2.isEmpty() ? QString() : slots.slot2 + QStringLiteral(".sav");
+    m_slots = state;
+    m_title = QFileInfo(state.slot1).completeBaseName();
+    m_ndsSavePath = state.slot1 + QStringLiteral(".sav");
+    m_gbaSavePath = state.slot2.isEmpty() ? QString() : state.slot2 + QStringLiteral(".sav");
     m_gbaModeRequested = false;
 
     melonDS::NDSArgs ndsArgs;
@@ -91,8 +91,19 @@ bool MelonSession::start(const SlotState& slots, QString& error)
         m_firmwareWritePath = m_firmware.path(QStringLiteral("firmware"));
     }
     ndsArgs.OutputSampleRate = 48000.0;
+#ifdef JIT_ENABLED
+    // melonDS JIT currently crashes on this MinGW/GCC build in DSi direct boot.
+    // The interpreter is slower but stable and is the correct v1 default.
+    ndsArgs.JIT = std::nullopt;
+#endif
 
-    m_usingDsi = slots.slot1Type == RomType::Dsi && m_firmware.hasDsiFirmware();
+    // DSi direct boot is not yet stable in this thin frontend. DSi-enhanced
+    // retail games also contain an NTR executable and are fully playable on a
+    // regular DS, so use compatibility mode instead of risking a host crash.
+    m_usingDsi = false;
+    if (state.slot1Type == RomType::Dsi)
+        melonDS::Platform::Log(melonDS::Platform::LogLevel::Info,
+            "DSi-enhanced title detected; using stable Nintendo DS compatibility mode\n");
     if (m_usingDsi) {
         melonDS::DSiArgs dsiArgs;
         static_cast<melonDS::NDSArgs&>(dsiArgs) = std::move(ndsArgs);
@@ -120,7 +131,7 @@ bool MelonSession::start(const SlotState& slots, QString& error)
         m_nds = std::make_unique<melonDS::NDS>(std::move(ndsArgs), this);
     }
 
-    const QByteArray rom = readFile(slots.slot1, error);
+    const QByteArray rom = readFile(state.slot1, error);
     if (rom.isEmpty()) {
         stop();
         return false;
@@ -138,22 +149,22 @@ bool MelonSession::start(const SlotState& slots, QString& error)
         return false;
     }
     m_nds->SetNDSCart(std::move(cart));
-    if (!loadSlot2(slots, error)) {
+    if (!loadSlot2(state, error)) {
         stop();
         return false;
     }
 
     m_nds->Reset();
-    m_nds->SetupDirectBoot(QFileInfo(slots.slot1).fileName().toStdString());
+    m_nds->SetupDirectBoot(QFileInfo(state.slot1).fileName().toStdString());
     m_nds->Start();
     return true;
 }
 
-bool MelonSession::loadSlot2(const SlotState& slots, QString& error)
+bool MelonSession::loadSlot2(const SlotState& state, QString& error)
 {
-    if (m_usingDsi || slots.slot2.isEmpty() || slots.slot2Type != RomType::Gba)
+    if (m_usingDsi || state.slot2.isEmpty() || state.slot2Type != RomType::Gba)
         return true;
-    const QByteArray rom = readFile(slots.slot2, error);
+    const QByteArray rom = readFile(state.slot2, error);
     if (rom.isEmpty())
         return false;
     QByteArray save;
@@ -167,6 +178,21 @@ bool MelonSession::loadSlot2(const SlotState& slots, QString& error)
     }
     m_nds->SetGBACart(std::move(cart));
     return true;
+}
+
+bool MelonSession::updateSlots(const SlotState& state, QString& error)
+{
+    if (!m_nds || state.slot1 != m_slots.slot1)
+        return false;
+    if (state.slot2 == m_slots.slot2)
+        return true;
+    if (!m_gbaSavePath.isEmpty() &&
+        !writeBytes(m_gbaSavePath, m_nds->GetGBASave(), m_nds->GetGBASaveLength(), error))
+        return false;
+    m_nds->EjectGBACart();
+    m_slots = state;
+    m_gbaSavePath = state.slot2.isEmpty() ? QString() : state.slot2 + QStringLiteral(".sav");
+    return loadSlot2(state, error);
 }
 
 void MelonSession::stop()
@@ -184,7 +210,9 @@ FramePacket MelonSession::frame()
     FramePacket packet;
     packet.core = ActiveCore::Melon;
     packet.detail = m_usingDsi ? QStringLiteral("Nintendo DSi · %1").arg(m_title)
-                               : QStringLiteral("Nintendo DS · %1").arg(m_title);
+        : (m_slots.slot1Type == RomType::Dsi
+            ? QStringLiteral("Nintendo DS compatibility mode · %1").arg(m_title)
+            : QStringLiteral("Nintendo DS · %1").arg(m_title));
     if (!m_nds || !m_nds->IsRunning())
         return packet;
 

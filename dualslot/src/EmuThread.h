@@ -44,7 +44,7 @@ private:
     enum class CommandType { Reset, SaveState, LoadState };
     struct Command { CommandType type; QString path; };
 
-    void switchSession(const SlotState& slots);
+    void switchSession(const SlotState& state);
     void processCommand();
 
     const FirmwareStore& m_firmware;
