@@ -1,0 +1,18 @@
+# Proprietary dumps and user data
+/firmware/
+/roms/
+/saves/
+
+# Build output
+/build*/
+/cmake-build-*/
+/.idea/
+/.vscode/
+
+# Runtime settings
+/dualslot.ini
+*.sav
+*.dst
+
+/melonDS-master
+/mgba-master
